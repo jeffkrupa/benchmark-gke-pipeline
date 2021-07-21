@@ -14,11 +14,13 @@ from stillwater import (
 )
 from stillwater.utils import ExceptionWrapper
 
-def get_callback(q):
-    def callback(result, error=None):
-        if error is not None:
-            q.put(error)
-        # don't need to actually do anything with the result right now I guess
+def get_callback(q=None,result=None,error=None):
+    if error:
+        q.put(error)
+
+    #def callback(error=None):
+    #    if error is not None:
+    #        q.put(error)
 
 def _normalize_file_prefix(file_prefix):
     if file_prefix is None:
@@ -84,9 +86,22 @@ def main(
 
     #client.start()
     q = Queue() # make sure to add this to the `from queue` imports
-    callback = get_callback(q)
+    #callback = get_callback(q)
     data_iter = iter(source)
-    for _ in range(num_iterations):
+    interval_start_time = datetime(2021,1,1,0,0,0)
+    with open("%sclient-time-dump.csv"%file_prefix, "w") as f:
+        f.truncate(0)
+        f.close()
+    for it in range(num_iterations):
+        num_equal_signs = it * 25 // num_iterations
+        num_spaces = 25 - num_equal_signs
+        msg = "|" + "=" * num_equal_signs + " " * num_spaces + "|"
+        msg += f" {it}/{num_iterations}"
+        num_spaces = " " * (max_len - len(msg))
+        if (datetime.now() - interval_start_time).total_seconds() > 1: 
+                    with open("%sclient-time-dump.csv"%file_prefix, "a") as f:
+                        f.write(datetime.now().strftime("%m/%d/%Y, %H:%M:%S.%f") + msg + num_spaces + "\n")#, end="\r", flush=True)
+                    interval_start_time = datetime.now()
         try:
             exc = q.get_nowait()
             raise exc
@@ -98,13 +113,13 @@ def main(
             frame = np.concatenate([f.x for f in frames], axis=0)
         else:
             frame = frames[0].x
-        print(frame) 
+        frame = frame.reshape(input.shape[0],input.shape[1],input.shape[2])
         x.set_data_from_numpy(frame)
         warm_up_client.async_infer(
             model_name,
             model_version=str(model_version),
             inputs=[x],
-            callback=callback
+            callback=get_callback
         )
     '''
 
