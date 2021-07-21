@@ -95,10 +95,11 @@ def main(
         frames = next(data_iter)
         frames = list(frames.values())
         if len(frames) > 1:
-            frame = np.concatenate(frames, axis=0)
+            frame = np.concatenate([f.x for f in frames], axis=0)
         else:
-            frame = frames[0]
-        x.set_value_from_numpy(frame)
+            frame = frames[0].x
+        print(frame) 
+        x.set_data_from_numpy(frame)
         warm_up_client.async_infer(
             model_name,
             model_version=str(model_version),
