@@ -40,16 +40,18 @@ spec:
         - containerPort: 8002
           name: metrics
         livenessProbe:
-          failureThreshold: 30
+          failureThreshold: 50
           initialDelaySeconds: 100
-          periodSeconds: 5
+          timeoutSeconds: 100
+          periodSeconds: 15
           httpGet:
             path: /v2/health/live
             port: http
         readinessProbe:
-          failureThreshold: 30
+          failureThreshold: 100
           initialDelaySeconds: 600
-          periodSeconds: 5
+          periodSeconds: 15
+          timeoutSeconds: 100
           httpGet:
             path: /v2/health/ready
             port: http

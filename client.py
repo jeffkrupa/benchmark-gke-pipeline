@@ -3,8 +3,8 @@ import logging
 import os
 import time
 import typing
-from queue import Empty
-
+from queue import Queue, Empty
+from datetime import datetime
 import numpy as np
 import tritonclient.grpc as triton
 from stillwater import (
@@ -14,6 +14,11 @@ from stillwater import (
 )
 from stillwater.utils import ExceptionWrapper
 
+def get_callback(q):
+    def callback(result, error=None):
+        if error is not None:
+            q.put(error)
+        # don't need to actually do anything with the result right now I guess
 
 def _normalize_file_prefix(file_prefix):
     if file_prefix is None:
@@ -67,7 +72,6 @@ def main(
 
     for i in range(warm_up):
         warm_up_client.infer(model_name, warm_up_inputs, str(model_version))
-
     file_prefix = _normalize_file_prefix(file_prefix)
     logging.info(
         f"Gathering performance metrics over {num_iterations} iterations"
@@ -78,7 +82,35 @@ def main(
     max_msg = f" {num_iterations}/{num_iterations}"
     max_len = len(bars) + len(max_msg)
 
-    client.start()
+    #client.start()
+    q = Queue() # make sure to add this to the `from queue` imports
+    callback = get_callback(q)
+    data_iter = iter(source)
+    for _ in range(num_iterations):
+        try:
+            exc = q.get_nowait()
+            raise exc
+        except Empty:
+            pass
+        frames = next(data_iter)
+        frames = list(frames.values())
+        if len(frames) > 1:
+            frame = np.concatenate(frames, axis=0)
+        else:
+            frame = frames[0]
+        x.set_value_from_numpy(frame)
+        warm_up_client.async_infer(
+            model_name,
+            model_version=str(model_version),
+            inputs=[x],
+            callback=callback
+        )
+    '''
+
+    interval_start_time = datetime(2021,1,1,0,0,0)
+    with open("%sclient-time-dump.csv"%file_prefix, "w") as f:
+        f.truncate(0)
+        f.close()
     try:
         while True:
             for seq_id, pipe in output_pipes.items():
@@ -88,18 +120,24 @@ def main(
                 if isinstance(x, ExceptionWrapper):
                     x.reraise()
                 num_packages_received += 1
+
+                if (datetime.now() - interval_start_time).total_seconds() > 1: 
+                    with open("%sclient-time-dump.csv"%file_prefix, "a") as f:
+                        f.write(datetime.now().strftime("%m/%d/%Y, %H:%M:%S.%f") + msg + num_spaces + "\n")#, end="\r", flush=True)
+                    interval_start_time = datetime.now()
             if num_packages_received >= num_iterations:
                 break
 
+            #if (datetime.now() - datetime(2021,1,1)).total_seconds() % report_interval_seconds == 0: print("hello")
             num_equal_signs = num_packages_received * 25 // num_iterations
             num_spaces = 25 - num_equal_signs
             msg = "|" + "=" * num_equal_signs + " " * num_spaces + "|"
             msg += f" {num_packages_received}/{num_iterations}"
             num_spaces = " " * (max_len - len(msg))
-            print(msg + num_spaces, end="\r", flush=True)
+            #print(msg + num_spaces, end="\r", flush=True)
     finally:
         client.stop()
-        client.join(1)
+        client.join(100)
         try:
             client.close()
         except ValueError:
@@ -108,7 +146,7 @@ def main(
             client.close()
             logging.warning("Client closed ungracefully")
 
-    with open(f"{file_prefix}client-stats.csv", "w") as f:
+    with open("%sclient-stats.csv"%file_prefix, "w") as f:
         columns = [
             "sequence_id",
             "message_start",
@@ -131,7 +169,7 @@ def main(
             measurements = [i - start_time for i in measurements]
             measurements = [sequence_id] + measurements
             f.write(",".join(map(str, measurements)))
-
+    '''
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
