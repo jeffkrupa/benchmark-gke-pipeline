@@ -50,20 +50,27 @@ def main(
         qps_limit=generation_rate,
         name="client"
     )
-
     output_pipes = {}
+    print(client)
+
     for i in range(num_clients):
         seq_id = sequence_id + i
 
         sources = []
-        for state_name, shape in client.states.items():
+        for input in client.model_config.input:
+            state_name = input.name
+            #shape = input.shape
+            shape = [i for i in input.dims]
+
+
+            #for state_name, shape in client.states.items():
             sources.append(DummyDataGenerator(
                 shape=shape,
                 name=state_name,
             ))
         source = MultiSourceGenerator(sources)
-        pipe = client.add_data_source(source, str(seq_id), seq_id)
-        output_pipes[seq_id] = pipe
+        #pipe = client.add_data_source(source, str(seq_id), seq_id)
+        #output_pipes[seq_id] = pipe
 
     warm_up_client = triton.InferenceServerClient(url)
     warm_up_inputs = []
@@ -92,13 +99,18 @@ def main(
     with open("%sclient-time-dump.csv"%file_prefix, "w") as f:
         f.truncate(0)
         f.close()
+    last_time = time.time()
     for it in range(num_iterations):
+
+        while (time.time() - last_time) < 1 / generation_rate - 1e-5:
+            time.sleep(1e-6)
+        last_time = time.time()
         num_equal_signs = it * 25 // num_iterations
         num_spaces = 25 - num_equal_signs
         msg = "|" + "=" * num_equal_signs + " " * num_spaces + "|"
         msg += f" {it}/{num_iterations}"
         num_spaces = " " * (max_len - len(msg))
-        if (datetime.now() - interval_start_time).total_seconds() > 1: 
+        if (datetime.now() - interval_start_time).total_seconds() > 30: 
                     with open("%sclient-time-dump.csv"%file_prefix, "a") as f:
                         f.write(datetime.now().strftime("%m/%d/%Y, %H:%M:%S.%f") + msg + num_spaces + "\n")#, end="\r", flush=True)
                     interval_start_time = datetime.now()
@@ -106,8 +118,9 @@ def main(
             exc = q.get_nowait()
             raise exc
         except Empty:
-            pass
+             pass
         frames = next(data_iter)
+        '''
         frames = list(frames.values())
         if len(frames) > 1:
             frame = np.concatenate([f.x for f in frames], axis=0)
@@ -119,6 +132,15 @@ def main(
             model_name,
             model_version=str(model_version),
             inputs=[x],
+            callback=get_callback
+        )
+        '''
+        for x in warm_up_inputs:
+            x.set_data_from_numpy(frames[x.name()].x)
+        warm_up_client.async_infer(
+            model_name,
+            model_version=str(model_version),
+            inputs=warm_up_inputs,
             callback=get_callback
         )
     '''

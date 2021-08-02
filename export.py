@@ -167,9 +167,9 @@ def main(
     )
 
     ensemble = repo.create_model(
-        f"{base_name}gwe2e", platform=PlatformName.ENSEMBLE
+        f"{base_name}gwe2e-nonstreaming", platform=PlatformName.ENSEMBLE
     )
-    ensemble.add_streaming_inputs(
+    '''ensemble.add_streaming_inputs(
         inputs=[
             deepcleans["h"].inputs["witness"],
             deepcleans["l"].inputs["witness"],
@@ -179,6 +179,11 @@ def main(
         name=f"{base_name}snapshotter",
         streams_per_gpu=streams_per_gpu
     )
+    
+    '''
+    for detector, model in deepcleans.items():
+        ensemble.add_input(model.inputs["witness"], name=f"{detector}_witness")
+    ensemble.add_input(pp_model.inputs["strain"])
 
     for detector, model in deepcleans.items():
         ensemble.pipe(
@@ -187,6 +192,7 @@ def main(
             name=f"noise_{detector}"
         )
         # ensemble.add_output(model.outputs["noise"], name=f"noise_{detector}")
+
     ensemble.pipe(
         pp_model.outputs["cleaned"],
         bbh_model.inputs["strain"]
