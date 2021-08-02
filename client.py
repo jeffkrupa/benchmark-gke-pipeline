@@ -14,9 +14,7 @@ from stillwater import (
 )
 from stillwater.utils import ExceptionWrapper
 
-def get_callback(q=None,result=None,error=None):
-    if error:
-        q.put(error)
+def get_callback(q):
 
     def callback(error=None):
         if error is not None:
