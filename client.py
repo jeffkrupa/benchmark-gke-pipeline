@@ -18,9 +18,11 @@ def get_callback(q=None,result=None,error=None):
     if error:
         q.put(error)
 
-    #def callback(error=None):
-    #    if error is not None:
-    #        q.put(error)
+    def callback(error=None):
+        if error is not None:
+            q.put(error)
+
+    return callback
 
 def _normalize_file_prefix(file_prefix):
     if file_prefix is None:
@@ -93,7 +95,7 @@ def main(
 
     #client.start()
     q = Queue() # make sure to add this to the `from queue` imports
-    #callback = get_callback(q)
+    callback = get_callback(q)
     data_iter = iter(source)
     interval_start_time = datetime(2021,1,1,0,0,0)
     with open("%sclient-time-dump.csv"%file_prefix, "w") as f:
@@ -119,7 +121,7 @@ def main(
             raise exc
         except Empty:
              pass
-        frames = next(data_iter)
+        #frames = next(data_iter)
         '''
         frames = list(frames.values())
         if len(frames) > 1:
@@ -135,13 +137,13 @@ def main(
             callback=get_callback
         )
         '''
-        for x in warm_up_inputs:
-            x.set_data_from_numpy(frames[x.name()].x)
+        #for x in warm_up_inputs:
+        #    x.set_data_from_numpy(frames[x.name()].x)
         warm_up_client.async_infer(
             model_name,
             model_version=str(model_version),
             inputs=warm_up_inputs,
-            callback=get_callback
+            callback=callback
         )
     '''
 
